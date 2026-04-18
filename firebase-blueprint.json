@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the system.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Display name of the user" },
+        "role": { "type": "string", "enum": ["STUDENT", "PROFESSOR"], "description": "User role" },
+        "projectId": { "type": "string", "description": "Optional project ID if the user is a student" }
+      },
+      "required": ["name", "role", "projectId"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A TCC project.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "description": "Unique join token" },
+        "name": { "type": "string", "description": "Name of the project" },
+        "students": { "type": "array", "description": "List of student names" },
+        "memberIds": { "type": "array", "description": "List of user IDs who are members" },
+        "lastInteraction": { "type": "number", "description": "Timestamp of last update" },
+        "phases": {
+          "type": "object",
+          "description": "The phases of the project (keys 1-8)"
+        }
+      },
+      "required": ["token", "name", "students", "memberIds", "lastInteraction", "phases"]
+    },
+    "KanbanCard": {
+      "title": "Kanban Card",
+      "description": "A task in the kanban board.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["BACKLOG", "TODO", "IN_PROGRESS", "BLOCKED", "DONE"] },
+        "blockReason": { "type": "string", "description": "Reason for block, if any" }
+      },
+      "required": ["title", "description", "status", "blockReason"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Projects containing data"
+    },
+    "/projects/{projectId}/cards/{cardId}": {
+      "schema": { "$ref": "#/entities/KanbanCard" },
+      "description": "Kanban cards for the project"
+    }
+  }
+}
