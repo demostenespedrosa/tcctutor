@@ -48,8 +48,16 @@ service cloud.firestore {
         return isSignedIn() && request.auth.uid in existing().memberIds;
       }
 
-      allow read: if isSignedIn() && (isProf() || isMember());
-      allow list: if isSignedIn() && (isProf() || request.auth.uid in resource.data.memberIds);
+      function isJoining() {
+        return isSignedIn() && 
+               !isMember() && 
+               incoming().diff(existing()).affectedKeys().hasOnly(['students', 'memberIds', 'lastInteraction']) &&
+               incoming().memberIds.size() == existing().memberIds.size() + 1 &&
+               request.auth.uid in incoming().memberIds;
+      }
+
+      allow get: if isSignedIn() && (isProf() || isMember());
+      allow list: if isSignedIn(); // Allow searching for project by token
       
       allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) &&
                     request.auth.uid in incoming().memberIds && 
@@ -57,7 +65,8 @@ service cloud.firestore {
 
       allow update: if isSignedIn() && isValidId(projectId) && (
         (isProf() && isValidProject(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['phases', 'lastInteraction'])) || 
-        (isMember() && isValidProject(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['phases', 'lastInteraction', 'students', 'memberIds']))
+        (isMember() && isValidProject(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['phases', 'lastInteraction', 'students', 'memberIds'])) ||
+        (isJoining() && isValidProject(incoming()))
       );
     }
     

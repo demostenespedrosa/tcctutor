@@ -2,14 +2,32 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAeSg3MfsiixhVUiYSsxOHyPERidjmcwgI",
-  authDomain: "inf04-4d0f2.firebaseapp.com",
-  projectId: "inf04-4d0f2",
-  storageBucket: "inf04-4d0f2.firebasestorage.app",
-  messagingSenderId: "1032730960823",
-  appId: "1:1032730960823:web:c30d62f520ae71fca0be32"
+const getFirebaseConfig = () => {
+  const config = {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
+  };
+
+  // Check if any required field is missing
+  const missingKeys = Object.entries(config)
+    .filter(([_, value]) => !value)
+    .map(([key]) => `VITE_FIREBASE_${key.replace(/[A-Z]/g, letter => `_${letter}`).toUpperCase()}`);
+
+  if (missingKeys.length > 0) {
+    console.error(
+      "ConfiguraÃ§Ã£o do Firebase incompleta. Por favor, adicione as seguintes chaves no painel de Settings > Secrets:\n" +
+      missingKeys.join("\n")
+    );
+  }
+  
+  return config;
 };
+
+const firebaseConfig = getFirebaseConfig();
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
