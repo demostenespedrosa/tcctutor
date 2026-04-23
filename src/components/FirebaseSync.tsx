@@ -90,6 +90,8 @@ export function FirebaseSync({ children }: { children: React.ReactNode }) {
             }
           };
         });
+      }, (err) => {
+        console.error(`Erro ao sincronizar cards do projeto ${projectId}:`, err);
       });
     };
 
@@ -103,6 +105,8 @@ export function FirebaseSync({ children }: { children: React.ReactNode }) {
           attachCardsListener(docSnap.id);
         });
         _syncProjects(newProjects);
+      }, (err) => {
+        console.error("Erro ao sincronizar projetos para o professor:", err);
       });
     } else if (currentUser.projectId) {
       unsubProjects = onSnapshot(doc(db, 'projects', currentUser.projectId), (docSnap) => {
@@ -114,6 +118,8 @@ export function FirebaseSync({ children }: { children: React.ReactNode }) {
           attachCardsListener(docSnap.id);
           _syncProjects(newProjects);
         }
+      }, (err) => {
+        console.error("Erro ao sincronizar projeto do aluno:", err);
       });
     }
 

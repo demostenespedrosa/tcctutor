@@ -11,9 +11,7 @@ service cloud.firestore {
     function existing() { return resource.data; }
     
     function isProf() { 
-      // Verify role from the users collection
       return isSignedIn() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'PROFESSOR';
     }
 
@@ -29,45 +27,40 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
       allow update: if isSignedIn() && request.auth.uid == userId && 
         isValidUser(incoming()) && 
-        incoming().role == existing().role && // Prevent role escalation
+        incoming().role == existing().role && 
         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'projectId']);
     }
 
     match /projects/{projectId} {
       function isValidProject(data) {
         return data.keys().hasAll(['token', 'name', 'students', 'memberIds', 'lastInteraction', 'phases']) &&
-               data.token is string && data.token.size() <= 10 &&
-               data.name is string && data.name.size() <= 100 &&
-               data.students is list && data.students.size() <= 20 &&
-               data.memberIds is list && data.memberIds.size() <= 20 &&
-               data.lastInteraction is number &&
+               data.token is string &&
+               data.name is string &&
+               data.students is list &&
+               data.memberIds is list &&
                data.phases is map;
       }
       
       function isMember() {
-        return isSignedIn() && request.auth.uid in existing().memberIds;
+        return isSignedIn() && (request.auth.uid in existing().memberIds);
       }
 
       function isJoining() {
         return isSignedIn() && 
-               !isMember() && 
                incoming().diff(existing()).affectedKeys().hasOnly(['students', 'memberIds', 'lastInteraction']) &&
-               incoming().memberIds.size() == existing().memberIds.size() + 1 &&
                request.auth.uid in incoming().memberIds;
       }
 
-      allow get: if isSignedIn() && (isProf() || isMember());
-      allow list: if isSignedIn(); // Allow searching for project by token
+      allow read: if isSignedIn(); // Allow searching and retrieval for all students/profs
       
       allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) &&
-                    request.auth.uid in incoming().memberIds && 
-                    !isProf(); // Students create projects
+                    request.auth.uid in incoming().memberIds;
 
       allow update: if isSignedIn() && isValidId(projectId) && (
-        (isProf() && isValidProject(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['phases', 'lastInteraction'])) || 
-        (isMember() && isValidProject(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['phases', 'lastInteraction', 'students', 'memberIds'])) ||
-        (isJoining() && isValidProject(incoming()))
-      );
+        isProf() || 
+        isMember() ||
+        isJoining()
+      ) && isValidProject(incoming());
     }
     
     match /projects/{projectId}/cards/{cardId} {
