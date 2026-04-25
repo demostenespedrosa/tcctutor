@@ -53,6 +53,8 @@ interface AppState {
   submitPhase: (projectId: string, phaseNum: 1|2|3|4|5|6|7|8, data: any) => Promise<void>;
   evaluatePhase: (projectId: string, phaseNum: 1|2|3|4|5|6|7|8, approved: boolean, feedback?: string) => Promise<void>;
   moveCard: (projectId: string, cardId: string, status: KanbanCard['status'], blockReason?: string) => Promise<void>;
+  createCard: (projectId: string, title: string, description: string) => Promise<void>;
+  deleteCard: (projectId: string, cardId: string) => Promise<void>;
   triggerInteraction: (projectId: string) => Promise<void>;
 }
 
@@ -248,6 +250,27 @@ export const useStore = create<AppState>()((set, get) => ({
       status,
       blockReason: status === 'BLOCKED' ? (blockReason || '') : ''
     });
+    const projRef = doc(db, 'projects', projectId);
+    await updateDoc(projRef, { lastInteraction: Date.now() });
+  },
+
+  createCard: async (projectId, title, description) => {
+    const cardId = uuidv4();
+    const cardRef = doc(db, `projects/${projectId}/cards`, cardId);
+    await setDoc(cardRef, {
+      title,
+      description,
+      status: 'TODO',
+      blockReason: ''
+    });
+    const projRef = doc(db, 'projects', projectId);
+    await updateDoc(projRef, { lastInteraction: Date.now() });
+  },
+
+  deleteCard: async (projectId, cardId) => {
+    const { deleteDoc } = await import('firebase/firestore');
+    const cardRef = doc(db, `projects/${projectId}/cards`, cardId);
+    await deleteDoc(cardRef);
     const projRef = doc(db, 'projects', projectId);
     await updateDoc(projRef, { lastInteraction: Date.now() });
   },

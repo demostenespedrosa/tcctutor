@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 0.1 Basic Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Admin/Professor check using Email directly to avoid O(n) lookups in list queries
+    // This follows Pillar 8 (Secure List Queries) by being cost-efficient.
+    function isProf() { 
+      return isEmailVerified() && request.auth.token.email == 'demostenestj@gmail.com'; 
+    }
+
+    // Helpers for specific collections
+    function isMember(projectData) {
+      return isSignedIn() && (request.auth.uid in projectData.get('memberIds', []));
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['name', 'role', 'projectId']) && data.keys().size() == 3 &&
+               data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+               data.role in ['STUDENT', 'PROFESSOR'] &&
+               data.projectId is string && data.projectId.size() <= 64;
+      }
+
+      allow get: if isSignedIn() && (request.auth.uid == userId || isProf());
+      allow list: if isProf(); 
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && 
+                    isValidUser(incoming()) && 
+                    incoming().role == existing().role &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'projectId']);
+    }
+
+    // 2. Projects Collection
+    match /projects/{projectId} {
+      function isValidProject(data) {
+        return data.keys().hasAll(['token', 'name', 'students', 'memberIds', 'lastInteraction', 'phases']) &&
+               data.keys().size() == 6 &&
+               data.token is string && data.token.size() <= 12 &&
+               data.name is string && data.name.size() <= 100 &&
+               data.students is list && data.students.size() <= 25 &&
+               data.memberIds is list && data.memberIds.size() <= 25 &&
+               data.lastInteraction is number &&
+               data.phases is map;
+      }
+
+      function isJoining() {
+        return isSignedIn() && 
+               incoming().diff(existing()).affectedKeys().hasOnly(['students', 'memberIds', 'lastInteraction']) &&
+               request.auth.uid in incoming().get('memberIds', []);
+      }
+
+      function isEvaluating() {
+        return isProf() && 
+               incoming().diff(existing()).affectedKeys().hasOnly(['phases', 'lastInteraction']);
+      }
+
+      function isSubmitting() {
+        return isMember(existing()) &&
+               incoming().diff(existing()).affectedKeys().hasOnly(['phases', 'lastInteraction']);
+      }
+
+      allow list: if isSignedIn() && (
+        isProf() || 
+        (request.auth.uid in resource.data.get('memberIds', []))
+      );
+
+      allow get: if isSignedIn() && isValidId(projectId); 
+      
+      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) &&
+                    request.auth.uid in incoming().get('memberIds', []);
+
+      allow update: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) && (
+        isEvaluating() || 
+        isSubmitting() ||
+        isJoining()
+      );
+    }
+
+    // 3. Kanban Cards Subcollection
+    match /projects/{projectId}/cards/{cardId} {
+      function isValidCard(data) {
+        return data.keys().hasAll(['title', 'description', 'status', 'blockReason']) &&
+               data.keys().size() == 4 &&
+               data.title is string && data.title.size() <= 150 &&
+               data.description is string && data.description.size() <= 2000 &&
+               data.status in ['BACKLOG', 'TODO', 'IN_PROGRESS', 'BLOCKED', 'DONE'] &&
+               data.blockReason is string && data.blockReason.size() <= 500;
+      }
+
+      function getProjectData() {
+        return get(/databases/$(database)/documents/projects/$(projectId)).data;
+      }
+
+      allow list: if isSignedIn() && (
+        isProf() || 
+        isMember(getProjectData())
+      );
+
+      allow get: if isSignedIn() && (
+        isProf() || 
+        isMember(getProjectData())
+      );
+
+      allow create: if isSignedIn() && isValidId(projectId) && isValidId(cardId) && 
+                    (isProf() || isMember(getProjectData())) &&
+                    isValidCard(incoming());
+
+      allow update: if isSignedIn() && isValidId(projectId) && isValidId(cardId) && 
+                    (isProf() || isMember(getProjectData())) &&
+                    isValidCard(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasAny(['title', 'description', 'status', 'blockReason']);
+        
+      allow delete: if isSignedIn() && isValidId(projectId) && isValidId(cardId) && 
+                    (isProf() || isMember(getProjectData()));
+    }
+  }
+}
